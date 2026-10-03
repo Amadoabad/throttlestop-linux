@@ -5,6 +5,9 @@ description = "Native Linux port of ThrottleStop mechanisms (Haswell-first): MSR
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+dependencies = [
+    "textual>=8.2.8",
+]
 
 [project.scripts]
 tslinux = "tslinux.cli:main"

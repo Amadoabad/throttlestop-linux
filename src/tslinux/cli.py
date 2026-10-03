@@ -100,6 +100,9 @@ def build() -> argparse.ArgumentParser:
     pd.add_argument("--interval", type=float, default=5.0)
     pg = sub.add_parser("gui", help="ThrottleStop-like window (Tkinter, root)")
     pg.set_defaults(fn=cmd_gui)
+    pt = sub.add_parser("tui", help="terminal dashboard (Textual, root)")
+    pt.set_defaults(fn=cmd_tui)
+    pt.add_argument("--interval", type=float, default=1.0)
     return p
 
 
@@ -109,6 +112,13 @@ def cmd_gui(_a) -> int:
 
     run_gui()
     return 0
+
+
+def cmd_tui(a) -> int:
+    engine.require_root()
+    from .tui import run_tui
+
+    return run_tui(interval=a.interval)
 
 
 def main() -> int:

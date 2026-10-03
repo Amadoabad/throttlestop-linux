@@ -70,6 +70,7 @@ sudo cp etc/tslinux.conf.example /etc/tslinux.conf
 sudo uv run tslinux apply
 sudo uv run tslinux monitor
 sudo uv run tslinux reset
+sudo uv run tslinux tui
 sudo uv run tslinux gui
 ```
 
