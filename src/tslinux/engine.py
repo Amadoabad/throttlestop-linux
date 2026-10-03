@@ -51,7 +51,10 @@ def apply_power(pl1_w, pl1_s, pl2_w, pl2_s, dry_run: bool = False) -> str:
         return "power: unchanged (no config)"
     c0 = msr.cpu_list()[0]
     raw606 = msr.read_msr(regs.MSR_RAPL_POWER_UNIT, c0)
-    cur = power.decode(msr.read_msr(regs.MSR_PKG_POWER_LIMIT, c0))
+    cur_raw = msr.read_msr(regs.MSR_PKG_POWER_LIMIT, c0)
+    cur = power.decode(cur_raw)
+    if cur["locked"] and any(v is not None for v in (pl1_w, pl1_s, pl2_w, pl2_s)):
+        return "power: skipped (firmware lock bit set; ThrottleStop hits the same wall)"
     pu, tu = power.power_unit(raw606), power.time_unit(raw606)
     pl1 = cur["pl1_w_ticks"] if pl1_w is None else int(round(float(pl1_w) / pu))
     pl2 = cur["pl2_w_ticks"] if pl2_w is None else int(round(float(pl2_w) / pu))

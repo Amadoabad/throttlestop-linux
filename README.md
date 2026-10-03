@@ -44,6 +44,21 @@ binary code is used — only the publicly documented register interface.
 - Never raise power/thermal limits beyond your cooling + adapter. Same
   Kill-a-Watt warning ThrottleStop shows applies here.
 
+## Troubleshooting
+
+- `locked=1` on power: firmware set the `0x610` lock bit. `apply` skips
+  power writes and says so; ThrottleStop on Windows hits the same wall.
+  Needs a BIOS option/unlock — rebooting won't clear a firmware lock.
+- `clockmod` below 100% (e.g. raw `0x12` = 12.5% on all cores): the EC is
+  holding on-demand modulation on. Default `apply` clears it; if it comes
+  back, run the `daemon` so re-application fights the EC like ThrottleStop
+  does in the background. `monitor` shows Ratio vs Effect MHz to prove it.
+- `intel-undervolt` also installed: only one writer to `0x150` at a time.
+  `sudo systemctl disable intel-undervolt.service` before enabling ours.
+- GUI on Wayland under sudo: root needs display access first:
+  `xhost +SI:localuser:root`, then
+  `sudo -E DISPLAY="$DISPLAY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" tslinux gui`.
+
 ## Use
 
 ```bash

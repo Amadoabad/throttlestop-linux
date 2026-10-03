@@ -33,7 +33,8 @@ def cmd_status(_a) -> int:
         r1a2 = msr.read_msr(regs.MSR_TEMPERATURE_TARGET, c0)
         print(f"turbo: {'disabled' if controls.turbo_disabled(r1a0) else 'enabled'}  "
               f"bdprochot: {'disabled' if controls.bdprochot_disabled(r1fc) else 'enabled'}  "
-              f"clockmod: {controls.clockmod_percent(r19a):.1f}%  trip: {cpuinfo.trip_temp_c(r1a2)}C")
+              f"clockmod: {controls.clockmod_percent(r19a):.1f}% (raw {r19a:#x})  "
+              f"trip: {cpuinfo.trip_temp_c(r1a2)}C")
     except (msr.MsrError, IndexError) as e:
         print(f"cannot access MSRs: {e}")
         return 1

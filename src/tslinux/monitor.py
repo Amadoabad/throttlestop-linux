@@ -28,14 +28,36 @@ def pkg_watts(prev_e: int, cur_e: int, dt: float, raw606: int) -> float:
     return (cur_e - prev_e) * eunit / dt if dt > 0 else 0.0
 
 
+def counter_delta(a0: int, a1: int, width: int = 64) -> int:
+    return (a1 - a0) % (1 << width)
+
+
+def effective_mhz(a0: int, m0: int, a1: int, m1: int, base_mhz: float) -> float:
+    """Average frequency from APERF/MPERF deltas.
+
+    MPERF ticks at a fixed reference (TSC/base rate), APERF at the actual
+    core rate, so eff = dAPERF/dMPERF * base. This is what exposes clock
+    modulation: ratio MHz stays 2800 while effective drops to ~350.
+    """
+    dm = counter_delta(m0, m1)
+    if dm == 0:
+        return 0.0
+    return counter_delta(a0, a1) / dm * base_mhz
+
+
+def sample_counters(cpus: list[int]) -> dict[int, tuple[int, int]]:
+    return {c: (msr.read_msr(regs.IA32_APERF, c), msr.read_msr(regs.IA32_MPERF, c)) for c in cpus}
+
+
 def header() -> str:
-    return f"{'CPU':>3} {'MHz':>6} {'Temp':>6} LIMITS"
+    return f"{'CPU':>3} {'Ratio':>6} {'Effect':>6} {'Temp':>6} LIMITS"
 
 
 def format_row(r: dict) -> str:
     t = f"{r['temp']}C" if r["temp"] is not None else "n/a"
     lim = ",".join(r["limits"]) if r["limits"] else "OK"
-    return f"{r['cpu']:>3} {r['mhz']:>6} {t:>6} {lim}"
+    eff = f"{r['eff_mhz']:.0f}" if r.get("eff_mhz") is not None else "n/a"
+    return f"{r['cpu']:>3} {r['mhz']:>6} {eff:>6} {t:>6} {lim}"
 
 
 def run(interval: float = 1.0, count: int = 0) -> int:
@@ -43,6 +65,9 @@ def run(interval: float = 1.0, count: int = 0) -> int:
     if not cpus:
         print("no /dev/cpu entries found")
         return 1
+    base_mhz = cpuinfo.decode_platform_info(msr.read_msr(regs.MSR_PLATFORM_INFO, cpus[0]))[
+        "max_non_turbo_ratio"
+    ] * 100
     # Clear sticky throttle log bits first (same as ThrottleStop refresh).
     for c in cpus:
         try:
@@ -52,13 +77,17 @@ def run(interval: float = 1.0, count: int = 0) -> int:
     i = 0
     try:
         while True:
+            c0 = sample_counters(cpus)
+            time.sleep(interval)
+            c1 = sample_counters(cpus)
+            eff = {c: effective_mhz(c0[c][0], c0[c][1], c1[c][0], c1[c][1], base_mhz) for c in cpus}
             print(header())
             for r in sample_once(cpus):
+                r["eff_mhz"] = eff[r["cpu"]]
                 print(format_row(r))
             i += 1
             if count and i >= count:
                 break
-            time.sleep(interval)
             print()
     except KeyboardInterrupt:
         pass
