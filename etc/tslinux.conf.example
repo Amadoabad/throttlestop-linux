@@ -1,0 +1,26 @@
+# Copy to /etc/tslinux.conf and edit. All values mirror ThrottleStop panels.
+# Undervolts are mV, 0 or negative only, down to about -1000. Start at 0,
+# test under load in -10 mV steps. CORE and CACHE should match on Haswell+.
+
+[general]
+bdprochot_disable = false
+# trip_temp_c = 95
+clockmod_full = true
+
+[undervolt]
+core = 0.0
+cache = 0.0
+gpu = 0.0
+agent = 0.0
+analog = 0.0
+
+[power]
+# Watts / seconds. Blank (comment out) = leave firmware value alone.
+# pl1_w = 47
+# pl1_s = 28
+# pl2_w = 58
+# pl2_s = 0.002
+
+[turbo]
+disable = false
+# limits = { "1c" = 38, "2c" = 37, "3c" = 36, "4c" = 35 }

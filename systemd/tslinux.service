@@ -1,0 +1,11 @@
+[Unit]
+Description=ThrottleStop Linux (re-apply MSR tweaks against EC resets)
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/tslinux --config /etc/tslinux.conf daemon --interval 5
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
