@@ -72,3 +72,27 @@ sudo uv run tslinux monitor
 sudo uv run tslinux reset
 sudo uv run tslinux gui
 ```
+
+## Service (re-apply against EC resets)
+
+```bash
+sudo cp systemd/tslinux.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now tslinux.service
+sudo journalctl -u tslinux -f
+```
+
+Disable: `sudo systemctl disable --now tslinux.service`.
+Only one MSR writer at a time — disable `intel-undervolt` first if enabled.
+
+## Requirements
+
+- Intel CPU with MSRs (`/dev/cpu/*/msr`, kernel `CONFIG_X86_MSR`), root.
+- Python 3.10+, [uv](https://docs.astral.sh/uv/).
+- GUI: Tkinter (stdlib) + X access for root (`xhost +SI:localuser:root`).
+
+## License
+
+MIT — see [LICENSE](LICENSE). Register-level behavior informed by the Intel
+SDM and the open-source `intel-undervolt` and `throttled` projects; all code
+here is original.
