@@ -84,3 +84,10 @@ def test_effective_mhz_clockmodulated():
 
 def test_effective_mhz_zero_window():
     assert monitor.effective_mhz(5, 5, 5, 5, 2800) == 0.0
+
+
+def test_aperf_mperf_addresses_match_kernel():
+    # Pinned against arch/x86/include/asm/msr-index.h (two local kernel
+    # builds agree). A swap here inverts the ratio and reports fantasy MHz.
+    assert regs.IA32_APERF == 0xE8
+    assert regs.IA32_MPERF == 0xE7
