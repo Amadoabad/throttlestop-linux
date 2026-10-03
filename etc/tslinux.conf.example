@@ -6,6 +6,8 @@
 bdprochot_disable = false
 # trip_temp_c = 95
 clockmod_full = true
+# multiplier = 36        # ThrottleStop "Set Multiplier", empty = skip
+# eist_enable = true     # ThrottleStop "SpeedStep"
 
 [undervolt]
 core = 0.0
@@ -13,6 +15,10 @@ cache = 0.0
 gpu = 0.0
 agent = 0.0
 analog = 0.0
+
+# [iccmax]               # ThrottleStop FIVR IccMax, amperes, empty = skip
+# core = 64.0
+# cache = 64.0
 
 [power]
 # Watts / seconds. Blank (comment out) = leave firmware value alone.
@@ -24,3 +30,6 @@ analog = 0.0
 [turbo]
 disable = false
 # limits = { "1c" = 38, "2c" = 37, "3c" = 36, "4c" = 35 }
+
+# ThrottleStop-style presets: [profile.1] .. [profile.4] with the same keys,
+# e.g. [profile.2.undervolt] core = -80.0. Switch with keys 1-4 in the TUI.

@@ -51,3 +51,42 @@ def decode_mv(raw: int) -> int:
     field = (raw >> 21) & 0x7FF
     signed = field if field < 0x400 else field - 0x800
     return int(round(signed / TICKS_PER_MV))
+
+
+# IccMax shares the 0x150 mailbox: read-select command 0x16, write 0x17,
+# 10-bit quarter-ampere field (throttled.py, FIVR IccMax slider).
+ICCMAX_PLANES = {"core": 0, "gpu": 1, "cache": 2}
+ICCMAX_STEPS_PER_A = 4
+ICCMAX_MAX_FIELD = 0x3FF
+
+
+def iccmax_to_field(amps: float) -> int:
+    try:
+        amps = float(amps)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"IccMax must be a number, got {amps!r}") from e
+    import math
+
+    max_a = ICCMAX_MAX_FIELD / ICCMAX_STEPS_PER_A
+    if not math.isfinite(amps) or not 0 < amps <= max_a:
+        raise ValueError(f"IccMax must be 0..{max_a:g} A, got {amps!r}")
+    field = int(amps * ICCMAX_STEPS_PER_A)  # floor: never enforce above asked
+    if not 1 <= field <= ICCMAX_MAX_FIELD:
+        raise ValueError(f"IccMax {amps!r} A quantises outside the 10-bit field")
+    return field
+
+
+def iccmax_encode_write(plane: str, amps: float) -> int:
+    if plane not in ICCMAX_PLANES:
+        raise ValueError(f"unknown current plane {plane!r}")
+    return 0x8000001700000000 | (ICCMAX_PLANES[plane] << 40) | iccmax_to_field(amps)
+
+
+def iccmax_encode_read(plane: str) -> int:
+    if plane not in ICCMAX_PLANES:
+        raise ValueError(f"unknown current plane {plane!r}")
+    return 0x8000001600000000 | (ICCMAX_PLANES[plane] << 40)
+
+
+def iccmax_decode_amp(raw: int) -> float:
+    return (raw & 0x3FF) / 4.0

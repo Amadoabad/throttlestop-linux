@@ -50,14 +50,22 @@ def sample_counters(cpus: list[int]) -> dict[int, tuple[int, int]]:
 
 
 def header() -> str:
-    return f"{'CPU':>3} {'Ratio':>6} {'Effect':>6} {'Temp':>6} LIMITS"
+    return f"{'CPU':>3} {'Ratio':>6} {'Effect':>6} {'C0%':>5} {'Temp':>6} LIMITS"
 
 
 def format_row(r: dict) -> str:
     t = f"{r['temp']}C" if r["temp"] is not None else "n/a"
     lim = ",".join(r["limits"]) if r["limits"] else "OK"
     eff = f"{r['eff_mhz']:.0f}" if r.get("eff_mhz") is not None else "n/a"
-    return f"{r['cpu']:>3} {r['mhz']:>6} {eff:>6} {t:>6} {lim}"
+    c0 = f"{r['c0_pct']:.1f}" if r.get("c0_pct") is not None else "n/a"
+    return f"{r['cpu']:>3} {r['mhz']:>6} {eff:>6} {c0:>5} {t:>6} {lim}"
+
+
+def c0_percent(dm: int, dt: float, ref_mhz: float) -> float:
+    """Share of the window the core was active (ThrottleStop C0% column)."""
+    if dt <= 0 or ref_mhz <= 0:
+        return 0.0
+    return min(100.0, max(0.0, dm / (ref_mhz * 1e6 * dt) * 100.0))
 
 
 def run(interval: float = 1.0, count: int = 0) -> int:
@@ -78,12 +86,15 @@ def run(interval: float = 1.0, count: int = 0) -> int:
     try:
         while True:
             c0 = sample_counters(cpus)
+            t0 = time.monotonic()
             time.sleep(interval)
             c1 = sample_counters(cpus)
+            dt = time.monotonic() - t0
             eff = {c: effective_mhz(c0[c][0], c0[c][1], c1[c][0], c1[c][1], base_mhz) for c in cpus}
             print(header())
             for r in sample_once(cpus):
                 r["eff_mhz"] = eff[r["cpu"]]
+                r["c0_pct"] = c0_percent(counter_delta(c0[r["cpu"]][1], c1[r["cpu"]][1]), dt, base_mhz)
                 print(format_row(r))
             i += 1
             if count and i >= count:

@@ -1,4 +1,4 @@
-from tslinux import controls, cpu, power, undervolt
+from tslinux import controls, cpu, monitor, power, undervolt
 
 
 def test_undervolt_roundtrip():
@@ -49,6 +49,34 @@ def test_controls_bits():
     assert not controls.turbo_disabled(controls.set_turbo(1 << 38, False))
     assert controls.bdprochot_disabled(controls.set_bdprochot(0xFFFFFFFF, True))
     assert controls.clockmod_percent(controls.clockmod_full(0x10)) == 100.0
+    assert controls.eist_enabled(controls.set_eist(0, True))
+    assert not controls.eist_enabled(controls.set_eist(1 << 16, False))
+    assert controls.perf_target_ratio(controls.set_perf_target_ratio(0, 37)) == 37
+    try:
+        controls.set_perf_target_ratio(0, 200)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("absurd multiplier accepted")
+
+
+def test_iccmax_roundtrip():
+    for amps in (8.0, 64.0, 128.0):
+        for plane in ("core", "cache"):
+            raw = undervolt.iccmax_encode_write(plane, amps) & 0xFFFFFFFF
+            assert abs(undervolt.iccmax_decode_amp(raw) - amps) < 0.25
+    try:
+        undervolt.iccmax_encode_write("core", 0.0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("0A IccMax accepted")
+
+
+def test_c0_percent():
+    assert monitor.c0_percent(2_800_000_000, 1.0, 2800) == 100.0
+    assert monitor.c0_percent(1_400_000_000, 1.0, 2800) == 50.0
+    assert monitor.c0_percent(0, 0.0, 2800) == 0.0
 
 
 def test_trip_offset():

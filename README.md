@@ -9,16 +9,25 @@ where the SDM allows.
 
 | ThrottleStop panel | Linux equivalent here | Register |
 |---|---|---|
-| FIVR undervolt | `apply` / GUI mV boxes | MSR `0x150` OC mailbox, planes core/gpu/cache/agent/analog |
+| FIVR undervolt | `apply` / TUI mV boxes | MSR `0x150` OC mailbox, planes core/gpu/cache/agent/analog |
+| FIVR IccMax | TUI A boxes / `[iccmax]` | MSR `0x150` cmds `0x16`/`0x17`, planes core/gpu/cache |
 | TPL power limits | `apply` PL1/PL2 + windows | MSR `0x610`, units `0x606` |
-| Turbo limits | `apply` turbo limits | MSR `0x1AD` |
+| TPL profiles 1-4 | TUI keys 1-4 + Save | `[profile.N]` sections in config |
+| Turbo limits per N cores | TUI 1c-4c boxes / config | MSR `0x1AD` |
+| Set Multiplier | TUI box / `multiplier` | `0x199` target ratio |
+| SpeedStep | TUI checkbox / `eist_enable` | `0x1A0` bit 16 |
 | Disable Turbo | checkbox / config | `0x1A0` bit 38 |
 | BD PROCHOT | checkbox / config | `0x1FC` bit 0 (clear = disabled) |
 | Clock Mod 100% | always on apply | `0x19A` enable bit cleared |
 | Temp / PROCHOT offset | `trip_temp_c` | `0x1A2` offset bits |
-| Right-panel monitor | `monitor` / GUI right side | `0x198/0x19C/0x1B1/0xE7/0xE8/0x611` |
+| Right-panel monitor | `monitor` / TUI table | `0x198/0x19C/0x1B1/0xE7/0xE8/0x611` + C0%/Mod columns |
 | Turn On/Off, Save | `apply`, `/etc/tslinux.conf` | same volatile MSRs |
 | EC fighting | `daemon` loop | re-apply every N s (like ThrottleStop polling) |
+
+Not ported (documented gaps): TPL Clamp toggles and Lock (never locked by design),
+PP0/Power Limit 4/TDP controls, C1E checkbox (unverified bit — left read-only),
+chipset clock-modulation (no public Haswell register confirmed), TS Bench,
+log-to-file (use `monitor | tee`).
 
 Sources: Intel SDM Vol.4, `intel-undervolt` (`undervolt.c` OC mailbox +
 `0x610`/`0x606`/`0x1A2` handling), `throttled` (`throttled.py` MSR table,

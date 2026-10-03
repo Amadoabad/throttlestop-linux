@@ -25,3 +25,19 @@ def test_save_load_roundtrip(tmp_path):
     assert back["power"]["pl1_w"] == 47.0
     assert back["trip_temp_c"] == 95
     assert back["turbo"]["limits"] == {"1c": 38}
+
+
+def test_profile_save_load_roundtrip(tmp_path):
+    from tslinux import config as cfgmod
+
+    cfg = cfgmod.load_config("etc/tslinux.conf.example")
+    cfg["undervolt"]["core"] = -80.0
+    cfg["turbo"]["limits"] = {"1c": 38, "4c": 36}
+    path = str(tmp_path / "tslinux.conf")
+    cfgmod.save_config(cfg, path)
+    cfg["undervolt"]["core"] = -60.0
+    cfgmod.save_profile(cfg, 2, path)
+    back = cfgmod.load_config(path)
+    assert back["undervolt"]["core"] == -80.0  # top level untouched by profile save
+    assert back["profiles"][2]["undervolt"]["core"] == -60.0
+    assert back["profiles"][2]["turbo"]["limits"] == {"1c": 38, "4c": 36}

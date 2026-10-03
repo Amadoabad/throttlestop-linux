@@ -20,11 +20,17 @@ def capture_defaults() -> dict:
     for p in regs.PLANE_NAMES:
         msr.write_msr(regs.MSR_OC_MAILBOX, undervolt.encode_read(p), c0)
         planes[p] = msr.read_msr(regs.MSR_OC_MAILBOX, c0) & 0xFFFFFFFF
+    iccmax = {}
+    for p in undervolt.ICCMAX_PLANES:
+        msr.write_msr(regs.MSR_OC_MAILBOX, undervolt.iccmax_encode_read(p), c0)
+        iccmax[p] = msr.read_msr(regs.MSR_OC_MAILBOX, c0) & 0x3FF
     return {
         "oc_mailbox": planes,
+        "iccmax": iccmax,
         "pkg_power_limit": msr.read_msr(regs.MSR_PKG_POWER_LIMIT, c0),
         "turbo_ratio_limit": msr.read_msr(regs.MSR_TURBO_RATIO_LIMIT, c0),
         "misc_enable": [msr.read_msr(regs.IA32_MISC_ENABLE, c) for c in cpus],
+        "perf_ctl": [msr.read_msr(regs.IA32_PERF_CTL, c) for c in cpus],
         "power_ctl": [msr.read_msr(regs.MSR_POWER_CTL, c) for c in cpus],
         "clock_mod": [msr.read_msr(regs.IA32_CLOCK_MODULATION, c) for c in cpus],
         "temp_target": msr.read_msr(regs.MSR_TEMPERATURE_TARGET, c0),
@@ -42,6 +48,28 @@ def apply_undervolts(offsets: dict, dry_run: bool = False) -> list[str]:
         log.append(f"plane {plane}: {mv} mV -> {val:#x}")
         if not dry_run:
             for c in cpus:
+                msr.write_msr(regs.MSR_OC_MAILBOX, val, c)
+    return log
+
+
+def read_live_iccmax() -> dict[str, float]:
+    c0 = msr.cpu_list()[0]
+    out = {}
+    for p in undervolt.ICCMAX_PLANES:
+        msr.write_msr(regs.MSR_OC_MAILBOX, undervolt.iccmax_encode_read(p), c0)
+        out[p] = undervolt.iccmax_decode_amp(msr.read_msr(regs.MSR_OC_MAILBOX, c0))
+    return out
+
+
+def apply_iccmax(amps: dict, dry_run: bool = False) -> list[str]:
+    log = []
+    for plane, a in (amps or {}).items():
+        if a is None:
+            continue
+        val = undervolt.iccmax_encode_write(plane, float(a))
+        log.append(f"iccmax {plane}: {a} A -> {val:#x}")
+        if not dry_run:
+            for c in msr.cpu_list():
                 msr.write_msr(regs.MSR_OC_MAILBOX, val, c)
     return log
 
@@ -69,16 +97,21 @@ def apply_power(pl1_w, pl1_s, pl2_w, pl2_s, dry_run: bool = False) -> str:
 def apply_all(cfg: dict, dry_run: bool = False) -> list[str]:
     log: list[str] = []
     log += apply_undervolts(cfg["undervolt"], dry_run)
+    log += apply_iccmax(cfg.get("iccmax", {}), dry_run)
     log.append(apply_power(cfg["power"]["pl1_w"], cfg["power"]["pl1_s"],
                            cfg["power"]["pl2_w"], cfg["power"]["pl2_s"], dry_run))
     cpus = msr.cpu_list()
-    # Turbo disable/enable (ThrottleStop main panel)
+    # Turbo disable/enable + SpeedStep (ThrottleStop main panel)
     for c in cpus:
         cur = msr.read_msr(regs.IA32_MISC_ENABLE, c)
         new = controls.set_turbo(cur, bool(cfg["turbo"]["disable"]))
+        if "eist_enable" in cfg:
+            new = controls.set_eist(new, bool(cfg["eist_enable"]))
         if new != cur and not dry_run:
             msr.write_msr(regs.IA32_MISC_ENABLE, new, c)
     log.append(f"turbo: {'disabled' if cfg['turbo']['disable'] else 'enabled'}")
+    if "eist_enable" in cfg:
+        log.append(f"speedstep: {'on' if cfg['eist_enable'] else 'off'}")
     # Turbo ratio limits
     if cfg["turbo"]["limits"]:
         c0 = cpus[0]
@@ -87,6 +120,14 @@ def apply_all(cfg: dict, dry_run: bool = False) -> list[str]:
         if not dry_run:
             msr.write_msr(regs.MSR_TURBO_RATIO_LIMIT, new, c0)
         log.append(f"turbo limits: {cfg['turbo']['limits']}")
+    # Set Multiplier (ThrottleStop main panel; empty = skip)
+    if cfg.get("multiplier") is not None:
+        for c in cpus:
+            cur = msr.read_msr(regs.IA32_PERF_CTL, c)
+            new = controls.set_perf_target_ratio(cur, int(cfg["multiplier"]))
+            if new != cur and not dry_run:
+                msr.write_msr(regs.IA32_PERF_CTL, new, c)
+        log.append(f"multiplier: {cfg['multiplier']}")
     # BD PROCHOT
     for c in cpus:
         cur = msr.read_msr(regs.MSR_POWER_CTL, c)
@@ -125,6 +166,14 @@ def reset_from_snapshot(dry_run: bool = False) -> list[str]:
         if not dry_run:
             for c in cpus:
                 msr.write_msr(regs.MSR_OC_MAILBOX, val, c)
+    # IccMax planes back to captured raw fields
+    for p, field in snap.get("iccmax", {}).items():
+        amps = undervolt.iccmax_decode_amp(field)
+        val = undervolt.iccmax_encode_write(p, amps)
+        log.append(f"reset iccmax {p}: {amps} A")
+        if not dry_run:
+            for c in cpus:
+                msr.write_msr(regs.MSR_OC_MAILBOX, val, c)
     c0 = cpus[0]
     if not dry_run:
         msr.write_msr(regs.MSR_PKG_POWER_LIMIT, snap["pkg_power_limit"], c0)
@@ -132,6 +181,8 @@ def reset_from_snapshot(dry_run: bool = False) -> list[str]:
         msr.write_msr(regs.MSR_TEMPERATURE_TARGET, snap["temp_target"], c0)
         for c, v in zip(cpus, snap["misc_enable"]):
             msr.write_msr(regs.IA32_MISC_ENABLE, v, c)
+        for c, v in zip(cpus, snap.get("perf_ctl", [])):
+            msr.write_msr(regs.IA32_PERF_CTL, v, c)
         for c, v in zip(cpus, snap["power_ctl"]):
             msr.write_msr(regs.MSR_POWER_CTL, v, c)
         for c, v in zip(cpus, snap["clock_mod"]):
