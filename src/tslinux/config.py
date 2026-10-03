@@ -57,6 +57,45 @@ def save_snapshot(data: dict, path: str = SNAPSHOT_PATH) -> None:
         json.dump(data, f, indent=2)
 
 
+def _toml_val(v) -> str:
+    if v is None:
+        return '""'
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float):
+        return repr(v)
+    return str(v)
+
+
+def save_config(cfg: dict, path: str = CONFIG_PATH) -> None:
+    """Write our known schema back as TOML (no new dependency)."""
+    lines = ["[general]"]
+    for key in ("bdprochot_disable", "clockmod_full"):
+        lines.append(f"{key} = {_toml_val(cfg.get(key))}")
+    if cfg.get("trip_temp_c") is not None:
+        lines.append(f"trip_temp_c = {_toml_val(cfg['trip_temp_c'])}")
+    lines.append("")
+    lines.append("[undervolt]")
+    for plane, mv in cfg.get("undervolt", {}).items():
+        lines.append(f"{plane} = {_toml_val(mv)}")
+    lines.append("")
+    lines.append("[power]")
+    for key in ("pl1_w", "pl1_s", "pl2_w", "pl2_s"):
+        val = cfg.get("power", {}).get(key)
+        if val is not None:
+            lines.append(f"{key} = {_toml_val(val)}")
+    lines.append("")
+    lines.append("[turbo]")
+    lines.append(f"disable = {_toml_val(cfg.get('turbo', {}).get('disable', False))}")
+    limits = cfg.get("turbo", {}).get("limits", {})
+    if limits:
+        inner = ", ".join(f'"{k}" = {v}' for k, v in limits.items())
+        lines.append(f"limits = {{ {inner} }}")
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def load_snapshot(path: str = SNAPSHOT_PATH) -> dict:
     with open(path) as f:
         return json.load(f)
